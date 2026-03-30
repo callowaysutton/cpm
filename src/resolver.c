@@ -116,6 +116,67 @@ module_node_t *dependency_graph_find_node(dependency_graph_t *graph, const char 
     return NULL;
 }
 
+static char *resolve_version_group(const char *module_path, const char *version_constraint) {
+    if (!version_constraint) return semver_strdup("latest");
+    
+    // Check if it's a local module (starts with '.' or '/')
+    int is_local = (module_path[0] == '/' || (module_path[0] == '.' && module_path[1] == '/'));
+    if (is_local) return semver_strdup(version_constraint);
+
+    semver_t constraint;
+    if (semver_parse(version_constraint, &constraint) != 0) {
+        return semver_strdup(version_constraint); // Not a semver (branch/commit)
+    }
+    
+    if (constraint.minor != -1 && constraint.patch != -1) {
+        // Fully specified, no group matching needed
+        semver_free(&constraint);
+        return semver_strdup(version_constraint);
+    }
+    
+    // Partial version, need to find the best match from tags
+    char **tags = NULL;
+    size_t count = 0;
+    if (get_all_tags(module_path, &tags, &count) != 0) {
+        semver_free(&constraint);
+        return semver_strdup(version_constraint); // Fallback to raw if git fails
+    }
+    
+    char *best_tag = NULL;
+    semver_t best_sv;
+    memset(&best_sv, 0, sizeof(semver_t));
+    best_sv.major = -1; best_sv.minor = -1; best_sv.patch = -1;
+    
+    for (size_t i = 0; i < count; i++) {
+        semver_t tag_sv;
+        if (semver_parse(tags[i], &tag_sv) == 0) {
+            if (semver_match(tag_sv, constraint)) {
+                if (best_tag == NULL || semver_compare(tag_sv, best_sv) > 0) {
+                    semver_free(&best_sv);
+                    // Deep copy tag_sv to best_sv
+                    best_sv.major = tag_sv.major;
+                    best_sv.minor = tag_sv.minor;
+                    best_sv.patch = tag_sv.patch;
+                    best_sv.prerelease = tag_sv.prerelease ? semver_strdup(tag_sv.prerelease) : NULL;
+                    best_sv.build = tag_sv.build ? semver_strdup(tag_sv.build) : NULL;
+                    
+                    if (best_tag) free(best_tag);
+                    best_tag = strdup(tags[i]);
+                }
+            }
+            semver_free(&tag_sv);
+        }
+    }
+    
+    // Cleanup
+    for (size_t i = 0; i < count; i++) free(tags[i]);
+    free(tags);
+    semver_free(&constraint);
+    semver_free(&best_sv);
+    
+    return best_tag ? best_tag : semver_strdup(version_constraint);
+}
+
 
 // Function to collect all available tags for a module
 
@@ -140,10 +201,13 @@ static int collect_all_requirements(
     }
 
     if (dependent_path && version) {
-        if (module_node_add_requirement(current_module_node, dependent_path, version) != 0) {
-            fprintf(stderr, "Error: Failed to add requirement for %s to node %s.\n", version, module_path);
+        char *resolved_version = resolve_version_group(module_path, version);
+        if (module_node_add_requirement(current_module_node, dependent_path, resolved_version) != 0) {
+            fprintf(stderr, "Error: Failed to add requirement for %s to node %s.\n", resolved_version, module_path);
+            free(resolved_version);
             return -1;
         }
+        free(resolved_version);
     }
 
     if (current_module_node->is_resolved) { 
@@ -152,7 +216,7 @@ static int collect_all_requirements(
 
     // Determine a version to fetch cmod.toml from.
     // In MVS we just fetch the EXACT version requested to find transitive dependencies.
-    char *version_to_fetch = version ? semver_strdup(version) : semver_strdup("latest");
+    char *version_to_fetch = resolve_version_group(module_path, version);
     
     // Check if it's a local module (starts with '.' or '/')
     int is_local = (module_path[0] == '/' || (module_path[0] == '.' && module_path[1] == '/'));
@@ -289,8 +353,16 @@ int resolve_dependencies(cmod_t *mod, resolved_t **out) {
             dependency_graph_free(&graph);
             return -1;
         }
+        // Resolve root dependency constraint immediately
+        char *resolved_constraint = resolve_version_group(req_path, req_constraint);
+        if (!resolved_constraint) {
+            dependency_graph_free(&graph);
+            return -1;
+        }
+
         // Add the root's requirement to itself for resolution
-        if (module_node_add_requirement(root_dep_node, mod->module, req_constraint) != 0) {
+        if (module_node_add_requirement(root_dep_node, mod->module, resolved_constraint) != 0) {
+            free(resolved_constraint);
             dependency_graph_free(&graph);
             return -1;
         }
@@ -298,11 +370,12 @@ int resolve_dependencies(cmod_t *mod, resolved_t **out) {
         // Recursively collect all transitive dependencies
         int rc = collect_all_requirements(
             req_path,
-            req_constraint,
+            resolved_constraint,
             mod->module, // The root module is the dependent
             &graph,
             0
         );
+        free(resolved_constraint);
         
         if (rc < 0) {
             dependency_graph_free(&graph);

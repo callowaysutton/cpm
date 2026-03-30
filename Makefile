@@ -24,7 +24,7 @@ install: $(BIN)
 	mkdir -p $(HOME)/.cpm/bin
 	cp $(BIN) $(HOME)/.cpm/bin/
 
-test: cpm
+test: clean cpm
 	$(MAKE) -C tests > build_output.log 2>&1
 	@cd tests && ./test_runner; \
 	RET=$$?; \

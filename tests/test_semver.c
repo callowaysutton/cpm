@@ -27,11 +27,15 @@ TEST(semver_parse, partial_versions) {
   ASSERT_EQ(res, 0);
   ASSERT_EQ(sv.major, 1);
   ASSERT_EQ(sv.minor, 2);
-  ASSERT_EQ(sv.patch, 0);
+  ASSERT_EQ(sv.patch, -1);
   semver_free(&sv);
 
   res = semver_parse("v5", &sv);
-  ASSERT_NE(res, 0);
+  ASSERT_EQ(res, 0);
+  ASSERT_EQ(sv.major, 5);
+  ASSERT_EQ(sv.minor, -1);
+  ASSERT_EQ(sv.patch, -1);
+  semver_free(&sv);
 }
 
 TEST(semver_parse, complex_versions) {
@@ -91,3 +95,55 @@ TEST(semver_compare, prerelease_rules) {
   semver_free(&v1);
   semver_free(&v2);
 }
+
+TEST(semver_match, groupings) {
+  semver_t constraint, v;
+
+  // v1.0 == v1.0.0-v1.0.99
+  semver_parse("1.0", &constraint);
+  semver_parse("1.0.0", &v);
+  ASSERT_TRUE(semver_match(v, constraint));
+  semver_free(&v);
+
+  semver_parse("1.0.5", &v);
+  ASSERT_TRUE(semver_match(v, constraint));
+  semver_free(&v);
+
+  semver_parse("1.1.0", &v);
+  ASSERT_FALSE(semver_match(v, constraint));
+  semver_free(&v);
+  semver_free(&constraint);
+
+  // v1 == v1.0-v1.99
+  semver_parse("1", &constraint);
+  semver_parse("1.0.0", &v);
+  ASSERT_TRUE(semver_match(v, constraint));
+  semver_free(&v);
+
+  semver_parse("1.9.9", &v);
+  ASSERT_TRUE(semver_match(v, constraint));
+  semver_free(&v);
+
+  semver_parse("2.0.0", &v);
+  ASSERT_FALSE(semver_match(v, constraint));
+  semver_free(&v);
+  semver_free(&constraint);
+}
+
+TEST(semver_compare, partial_precedence) {
+  semver_t v1, v2;
+  // 1.0.0 should be "greater" than partial 1.0
+  semver_parse("1.0.0", &v1);
+  semver_parse("1.0", &v2);
+  ASSERT_GT(semver_compare(v1, v2), 0);
+  semver_free(&v1);
+  semver_free(&v2);
+
+  // 1.1 should be greater than 1.0
+  semver_parse("1.1", &v1);
+  semver_parse("1.0", &v2);
+  ASSERT_GT(semver_compare(v1, v2), 0);
+  semver_free(&v1);
+  semver_free(&v2);
+}
+

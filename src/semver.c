@@ -15,6 +15,9 @@ int semver_parse(const char *version_str, semver_t *out) {
     if (!version_str || !out) return -1;
 
     memset(out, 0, sizeof(semver_t)); // Initialize to zero
+    out->major = -1;
+    out->minor = -1;
+    out->patch = -1;
 
     char *mutable_version = semver_strdup(version_str);
     if (!mutable_version) return -1;
@@ -26,50 +29,69 @@ int semver_parse(const char *version_str, semver_t *out) {
         p++;
     }
 
+    if (!isdigit(*p)) {
+        free(mutable_version);
+        return -1;
+    }
+
     char *major_str = p;
     char *dot1 = strchr(p, '.');
-    if (!dot1) {
-        free(mutable_version);
-        return -1; // Must have at least major.minor
-    }
-    *dot1 = '\0';
-    out->major = atoi(major_str);
-
-    char *minor_str = dot1 + 1;
-    char *dot2 = strchr(minor_str, '.');
     char type = 0;
-    if (!dot2) {
-        // No patch version, handle as 0 for now
-        char *pre = strchr(minor_str, '-');
-        char *bld = strchr(minor_str, '+');
+    
+    if (!dot1) {
+        // No minor/patch, just major
+        char *pre = strchr(p, '-');
+        char *bld = strchr(p, '+');
         char *pre_or_build = pre && bld ? (pre < bld ? pre : bld) : (pre ? pre : bld);
-
+        
         if (pre_or_build) {
             type = *pre_or_build;
             *pre_or_build = '\0';
-            out->minor = atoi(minor_str);
+            out->major = atoi(major_str);
             p = pre_or_build + 1;
         } else {
-            out->minor = atoi(minor_str);
-            p = NULL; // End of string
+            out->major = atoi(major_str);
+            p = NULL; 
         }
     } else {
-        *dot2 = '\0';
-        out->minor = atoi(minor_str);
+        *dot1 = '\0';
+        out->major = atoi(major_str);
 
-        char *patch_str = dot2 + 1;
-        char *pre = strchr(patch_str, '-');
-        char *bld = strchr(patch_str, '+');
-        char *pre_or_build = pre && bld ? (pre < bld ? pre : bld) : (pre ? pre : bld);
+        char *minor_str = dot1 + 1;
+        char *dot2 = strchr(minor_str, '.');
+        if (!dot2) {
+            // No patch version
+            char *pre = strchr(minor_str, '-');
+            char *bld = strchr(minor_str, '+');
+            char *pre_or_build = pre && bld ? (pre < bld ? pre : bld) : (pre ? pre : bld);
 
-        if (pre_or_build) {
-            type = *pre_or_build;
-            *pre_or_build = '\0';
-            out->patch = atoi(patch_str);
-            p = pre_or_build + 1;
+            if (pre_or_build) {
+                type = *pre_or_build;
+                *pre_or_build = '\0';
+                out->minor = atoi(minor_str);
+                p = pre_or_build + 1;
+            } else {
+                out->minor = atoi(minor_str);
+                p = NULL; // End of string
+            }
         } else {
-            out->patch = atoi(patch_str);
-            p = NULL; // End of string
+            *dot2 = '\0';
+            out->minor = atoi(minor_str);
+
+            char *patch_str = dot2 + 1;
+            char *pre = strchr(patch_str, '-');
+            char *bld = strchr(patch_str, '+');
+            char *pre_or_build = pre && bld ? (pre < bld ? pre : bld) : (pre ? pre : bld);
+
+            if (pre_or_build) {
+                type = *pre_or_build;
+                *pre_or_build = '\0';
+                out->patch = atoi(patch_str);
+                p = pre_or_build + 1;
+            } else {
+                out->patch = atoi(patch_str);
+                p = NULL; // End of string
+            }
         }
     }
 
@@ -155,7 +177,18 @@ static int compare_prerelease(const char *p1, const char *p2) {
 }
 
 
-// Compares two semver_t structs.
+// Returns true if version matches the grouping constraint.
+// e.g., 1.0.5 matches 1.0 (major=1, minor=0, patch=-1)
+bool semver_match(const semver_t version, const semver_t constraint) {
+    if (constraint.major != -1 && version.major != constraint.major) return false;
+    if (constraint.minor != -1 && version.minor != constraint.minor) return false;
+    if (constraint.patch != -1 && version.patch != constraint.patch) return false;
+    // For prerelease/build metadata, we usually expect them to be empty if the constraint is wild
+    // but the user requirement was specifically about major.minor grouping.
+    return true;
+}
+
+// Compares two semver_t structs absolutely. 
 // Returns -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2.
 int semver_compare(const semver_t v1, const semver_t v2) {
     if (v1.major != v2.major) return v1.major > v2.major ? 1 : -1;

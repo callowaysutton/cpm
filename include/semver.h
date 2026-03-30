@@ -17,6 +17,9 @@ typedef struct {
 // Caller is responsible for freeing prerelease and build fields.
 int semver_parse(const char *version_str, semver_t *out);
 
+// Returns true if version matches the grouping constraint.
+bool semver_match(const semver_t version, const semver_t constraint);
+
 // Compares two semver_t structs.
 // Returns -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2.
 int semver_compare(const semver_t v1, const semver_t v2);

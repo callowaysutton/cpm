@@ -1,0 +1,5 @@
+module = "example.com/your/app"
+version = "v0.1.0"
+
+[requires]
+../lib-a = "main"

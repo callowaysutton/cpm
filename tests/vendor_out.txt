@@ -1,0 +1,156 @@
+Copying local module from /tmp/cpm_test_local_src to /tmp/cpm_test_local_dst
+[main (root-commit) 584e3b3] Initial
+ 1 file changed, 1 insertion(+)
+ create mode 100644 hello.txt
+Fetching local commit from /tmp/cpm_test_git_src at 584e3b3f1744bbcfc0e0e940063f033ff2235863
+Cloning into '/tmp/cpm_test_git_dst'...
+done.
+Note: switching to '584e3b3f1744bbcfc0e0e940063f033ff2235863'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+HEAD is now at 584e3b3 Initial
+[main (root-commit) bfa9888] Initial
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+ create mode 100644 file
+[main 988f5e6] Second
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+ create mode 100644 file2
+[main (root-commit) 59f5df5] Initial
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+ create mode 100644 file
+Cloning remote branch/tag: dummy/module/test@v1.0.0
+URL: https://dummy/module/test.git
+Cloning into '.cpm/cache/dummy_module_test@v1.0.0'...
+fatal: unable to access 'https://dummy/module/test.git/': Could not resolve host: dummy
+Command failed: git clone --depth 1 --branch v1.0.0 https://dummy/module/test.git .cpm/cache/dummy_module_test@v1.0.0 (exit 32768)
+Vendoring dummy/repo@v1.0.0...
+Vendoring fake/repo@v2.0.0...
+Warning: cannot open directory .cpm/cache/fake_repo@v2.0.0: No such file or directory
+Warning: failed to vendor fake/repo@v2.0.0
+Vendoring fake/repo@v2.0.0...
+Warning: cannot open directory .cpm/cache/fake_repo@v2.0.0: No such file or directory
+Warning: failed to vendor fake/repo@v2.0.0
+cpm: missing command
+cpm: unknown command 'blablabla'
+Run 'cpm help' for usage information.
+Usage: cpm get <module>@<version>
+Error: expected <module>@<version>
+[1m
+======================================================
+  SHT - Simple Header-only Testing Framework
+======================================================
+[0m  Running 20 test(s)...
+
+semver_parse Suite:
+[0m  [PASS][0m valid_simple_versions                              (0.002 ms)
+  [PASS][0m partial_versions                                   (0.001 ms)
+  [PASS][0m complex_versions                                   (0.003 ms)
+
+semver_compare Suite:
+[0m  [PASS][0m greater_than                                       (0.001 ms)
+  [PASS][0m prerelease_rules                                   (0.005 ms)
+
+cmod Suite:
+[0m  [PASS][0m basic_load_save                                    (0.422 ms)
+  [PASS][0m empty_file                                         (0.122 ms)
+  [PASS][0m invalid_file                                       (0.006 ms)
+
+fetcher Suite:
+[0m  [PASS][0m local_directory_copy                               (31.019 ms)
+  [PASS][0m local_git_clone                                    (204.181 ms)
+  [PASS][0m git_get_all_tags                                   (215.866 ms)
+  [PASS][0m git_get_commit_for_ref                             (172.687 ms)
+
+Cache Suite:
+[0m  [PASS][0m cache_path_basic                                   (0.002 ms)
+  [PASS][0m cache_path_complex                                 (0.002 ms)
+  [PASS][0m ensure_cached_logic                                (68.382 ms)
+
+Vendor Suite:
+[0m  [PASS][0m populate_and_clean                                 (48.821 ms)
+[1m  [FAIL][0m populate_errors                                    (16.784 ms)
+    ./test_vendor.c:62: Expected: rc == -1, but found: 0 != -1
+
+CLI Suite:
+[0mCPM - C Package Manager
+=======================
+
+Usage: cpm <command> [options]
+
+CPM manages C library dependencies via Git repositories. It resolves
+dependency graphs, caches modules locally, vendors them into your
+project, and generates build flags for your build system.
+
+Commands:
+  init           Initialize a new cmod.toml in the current directory.
+                 Infers the module name from the local git remote.
+
+  get <mod>@<ver>
+                 Fetch a dependency and add it to cmod.toml.
+                 - <mod> is a Git URL or path (e.g. github.com/user/lib)
+                 - <ver> is a tag (v1.0.0 or 1.0.0) or commit SHA
+                 Examples:
+                   cpm get github.com/user/lib@v1.0.0
+                   cpm get github.com/user/lib@v1.0
+                   cpm get github.com/user/lib@latest-tag
+                   cpm get github.com/user/lib@abc1234
+
+  tidy           Remove vendored modules that are no longer required.
+                 Reads cmod.toml and cleans up .cpm/vendor/ accordingly.
+
+  vendor         Re-populate the vendor directory with all dependencies.
+                 Useful after modifying cmod.toml manually.
+
+  clean          Remove the entire .cpm directory (cache + vendor).
+                 Fetches will re-download on next 'get'.
+
+  help           Show this help screen.
+
+Version Matching:
+  - Tags with 'v' prefix are equivalent (v1.0.0 == 1.0.0)
+  - Partial versions resolve to the highest available patch
+    (v1.0 matches v1.0.2 if it's the latest 1.0.x tag)
+  - Plain SHAs or commit references are used verbatim
+
+Files:
+  cmod.toml      Manifest file listing your module and dependencies
+  .cpm/          Local cache and vendor directory (can be gitignored)
+  .cpm/cpm.mk    Generated Makefile fragment (include in your Makefile)
+
+Integration:
+  Add this line to your Makefile AFTER defining CFLAGS:
+    -include .cpm/cpm.mk
+
+  Then build normally:
+    make all
+
+  [PASS][0m basic_commands                                     (0.005 ms)
+  [PASS][0m get_command_errors                                 (0.002 ms)
+  [PASS][0m get_vendor_tidy_flow                               (0.000 ms)
+
+============
+Test Summary
+============
+[0mTests: 19 passed, 1 failed, 0 skipped
+
+  Total: 20
+  Assertions:   1/78 (failed/total)
+  Time:         758.313 ms
+  Leaks:        No memory leaks detected
+[0m
+FAILED!
+[0m

@@ -1,0 +1,6 @@
+module = "cpm-tests"
+version = "v0.1.0"
+compile_flags = true
+
+[requires]
+github.com/callowaysutton/sht-lib = "tag:v1.0"

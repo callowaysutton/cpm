@@ -1,0 +1,16 @@
+# Build artifacts
+*.o
+*.a
+*.so
+*.dylib
+simple-test
+
+# CPM working directory
+.cpm/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

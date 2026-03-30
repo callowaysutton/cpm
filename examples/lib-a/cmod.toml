@@ -1,0 +1,8 @@
+module = "example.com/your/lib-a"
+version = "v0.1.0"
+
+[build]
+command = "make"
+
+[requires]
+github.com/callowaysutton/sht-lib = "main"

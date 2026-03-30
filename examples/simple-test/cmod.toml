@@ -1,0 +1,5 @@
+module = "example.com/your/module"
+version = "v0.1.0"
+
+[requires]
+github.com/callowaysutton/sht-lib = "main"

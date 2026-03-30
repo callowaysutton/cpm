@@ -1,5 +1,7 @@
 # CPM - A Git-based C Package Manager
 
+[![Testing Framework Status](https://github.com/callowaysutton/cpm/actions/workflows/c-test.yml/badge.svg?branch=main)](https://github.com/callowaysutton/cpm/actions/workflows/c-test.yml)
+
 A lightweight, Git-based package manager for C projects, inspired by Go's package ecosystem. CPM leverages your system's `git` binary to fetch dependencies from any Git repository (local or remote), providing a zero-runtime-dependency solution for managing C libraries.
 
 ## Features

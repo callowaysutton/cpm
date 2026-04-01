@@ -128,6 +128,16 @@ TEST(semver_match, groupings) {
   ASSERT_FALSE(semver_match(v, constraint));
   semver_free(&v);
   semver_free(&constraint);
+
+  // Partial match with -1
+  semver_parse("1.2", &constraint);
+  semver_parse("1.2.3", &v);
+  ASSERT_TRUE(semver_match(v, constraint));
+  semver_free(&v);
+  semver_parse("1.3.0", &v);
+  ASSERT_FALSE(semver_match(v, constraint));
+  semver_free(&v);
+  semver_free(&constraint);
 }
 
 TEST(semver_compare, partial_precedence) {
@@ -248,5 +258,78 @@ TEST(semver_range, spaces_matching) {
   ASSERT_TRUE(semver_range_match(v, range));
   semver_free(&v);
   semver_range_free(&range);
+}
+
+TEST(semver_range, caret_edge_cases) {
+  semver_range_t range;
+  semver_t v;
+
+  semver_range_parse("^0.0.0", &range);
+  semver_parse("0.0.0", &v);
+  ASSERT_TRUE(semver_range_match(v, range));
+  semver_free(&v);
+  semver_parse("0.0.1", &v);
+  ASSERT_FALSE(semver_range_match(v, range));
+  semver_free(&v);
+  semver_range_free(&range);
+
+  semver_range_parse("^0.0", &range);
+  semver_parse("0.0.5", &v);
+  ASSERT_TRUE(semver_range_match(v, range));
+  semver_free(&v);
+  semver_parse("0.1.0", &v);
+  ASSERT_FALSE(semver_range_match(v, range));
+  semver_free(&v);
+  semver_range_free(&range);
+
+  semver_range_parse("^0", &range);
+  semver_parse("0.5.2", &v);
+  ASSERT_TRUE(semver_range_match(v, range));
+  semver_free(&v);
+  semver_parse("1.0.0", &v);
+  ASSERT_FALSE(semver_range_match(v, range));
+  semver_free(&v);
+  semver_range_free(&range);
+}
+
+TEST(semver_range, prerelease_matching) {
+  semver_range_t range;
+  semver_t v;
+
+  semver_range_parse("^1.2.3", &range);
+  semver_parse("1.2.4-alpha", &v);
+  ASSERT_FALSE(semver_range_match(v, range));
+  semver_free(&v);
+
+  semver_parse("1.2.3-alpha", &v);
+  ASSERT_FALSE(semver_range_match(v, range));
+  semver_free(&v);
+
+  semver_parse("1.2.3", &v);
+  ASSERT_TRUE(semver_range_match(v, range));
+  semver_free(&v);
+  semver_range_free(&range);
+
+  semver_range_parse(">=1.2.3-alpha", &range);
+  semver_parse("1.2.3-beta", &v);
+  ASSERT_TRUE(semver_range_match(v, range));
+  semver_free(&v);
+
+  semver_parse("1.2.4-alpha", &v);
+  ASSERT_FALSE(semver_range_match(v, range));
+  semver_free(&v);
+  semver_range_free(&range);
+}
+
+TEST(semver_range, error_cases) {
+  semver_range_t range;
+  int res = semver_range_parse(">=", &range);
+  ASSERT_NE(res, 0);
+
+  res = semver_range_parse("invalid || ^1.0.0", &range);
+  ASSERT_NE(res, 0);
+
+  res = semver_range_parse(NULL, &range);
+  ASSERT_NE(res, 0);
 }
 

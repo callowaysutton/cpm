@@ -203,9 +203,21 @@ int semver_compare(const semver_t v1, const semver_t v2) {
 }
 
 static bool semver_comp_match(const semver_t v, const semver_comp_t comp) {
+    // SemVer 2.0.0 rule: if v has prerelease, it only matches if it has same major.minor.patch
+    // as comp.version. (This is a simplified version of node-semver's rule)
+    if (v.prerelease) {
+        if (v.major != comp.version.major || v.minor != comp.version.minor || v.patch != comp.version.patch) {
+            return false;
+        }
+    }
+
     int cmp = semver_compare(v, comp.version);
     switch (comp.op) {
-        case SV_OP_EQ: return cmp == 0;
+        case SV_OP_EQ:
+            if (comp.version.major != -1 && v.major != comp.version.major) return false;
+            if (comp.version.minor != -1 && v.minor != comp.version.minor) return false;
+            if (comp.version.patch != -1 && v.patch != comp.version.patch) return false;
+            return true;
         case SV_OP_GT: return cmp > 0;
         case SV_OP_GTE: return cmp >= 0;
         case SV_OP_LT: return cmp < 0;
@@ -219,6 +231,15 @@ static bool semver_comp_match(const semver_t v, const semver_comp_t comp) {
             } else if (comp.version.patch > 0) {
                 return v.major == 0 && v.minor == 0 && v.patch == comp.version.patch;
             } else {
+                if (comp.version.minor == 0) {
+                    if (comp.version.patch == 0) {
+                        return v.major == 0 && v.minor == 0 && v.patch == 0;
+                    } else if (comp.version.patch == -1) {
+                        return v.major == 0 && v.minor == 0;
+                    }
+                } else if (comp.version.minor == -1) {
+                    return v.major == 0;
+                }
                 return v.major == 0 && v.minor == 0;
             }
         case SV_OP_TILDE:

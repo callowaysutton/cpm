@@ -123,22 +123,27 @@ static char *resolve_version_group(const char *module_path, const char *version_
     int is_local = (module_path[0] == '/' || (module_path[0] == '.' && module_path[1] == '/'));
     if (is_local) return semver_strdup(version_constraint);
 
-    semver_t constraint;
-    if (semver_parse(version_constraint, &constraint) != 0) {
-        return semver_strdup(version_constraint); // Not a semver (branch/commit)
-    }
-    
-    if (constraint.minor != -1 && constraint.patch != -1) {
-        // Fully specified, no group matching needed
-        semver_free(&constraint);
+    semver_range_t range;
+    if (semver_range_parse(version_constraint, &range) != 0) {
+        // Not a semver (branch/commit)
         return semver_strdup(version_constraint);
     }
     
-    // Partial version, need to find the best match from tags
+    // Check if fully specified exact version (not a range and not partial)
+    if (range.count == 1 && range.sets[0].count == 1 && range.sets[0].comps[0].op == SV_OP_EQ) {
+        semver_t *v = &range.sets[0].comps[0].version;
+        if (v->major != -1 && v->minor != -1 && v->patch != -1 && !v->prerelease) {
+            // Fully specified, no group matching needed
+            semver_range_free(&range);
+            return semver_strdup(version_constraint);
+        }
+    }
+    
+    // Partial version or range, need to find the best match from tags
     char **tags = NULL;
     size_t count = 0;
     if (get_all_tags(module_path, &tags, &count) != 0) {
-        semver_free(&constraint);
+        semver_range_free(&range);
         return semver_strdup(version_constraint); // Fallback to raw if git fails
     }
     
@@ -150,7 +155,7 @@ static char *resolve_version_group(const char *module_path, const char *version_
     for (size_t i = 0; i < count; i++) {
         semver_t tag_sv;
         if (semver_parse(tags[i], &tag_sv) == 0) {
-            if (semver_match(tag_sv, constraint)) {
+            if (semver_range_match(tag_sv, range)) {
                 if (best_tag == NULL || semver_compare(tag_sv, best_sv) > 0) {
                     semver_free(&best_sv);
                     // Deep copy tag_sv to best_sv
@@ -171,7 +176,7 @@ static char *resolve_version_group(const char *module_path, const char *version_
     // Cleanup
     for (size_t i = 0; i < count; i++) free(tags[i]);
     free(tags);
-    semver_free(&constraint);
+    semver_range_free(&range);
     semver_free(&best_sv);
     
     return best_tag ? best_tag : semver_strdup(version_constraint);

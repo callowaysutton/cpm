@@ -202,6 +202,174 @@ int semver_compare(const semver_t v1, const semver_t v2) {
     return 0;
 }
 
+static bool semver_comp_match(const semver_t v, const semver_comp_t comp) {
+    // SemVer 2.0.0 rule: if v has prerelease, it only matches if it has same major.minor.patch
+    // as comp.version. (This is a simplified version of node-semver's rule)
+    if (v.prerelease) {
+        if (v.major != comp.version.major || v.minor != comp.version.minor || v.patch != comp.version.patch) {
+            return false;
+        }
+    }
+
+    int cmp = semver_compare(v, comp.version);
+    switch (comp.op) {
+        case SV_OP_EQ:
+            if (comp.version.major != -1 && v.major != comp.version.major) return false;
+            if (comp.version.minor != -1 && v.minor != comp.version.minor) return false;
+            if (comp.version.patch != -1 && v.patch != comp.version.patch) return false;
+            return true;
+        case SV_OP_GT: return cmp > 0;
+        case SV_OP_GTE: return cmp >= 0;
+        case SV_OP_LT: return cmp < 0;
+        case SV_OP_LTE: return cmp <= 0;
+        case SV_OP_CARET:
+            if (cmp < 0) return false;
+            if (comp.version.major > 0) {
+                return v.major == comp.version.major;
+            } else if (comp.version.minor > 0) {
+                return v.major == 0 && v.minor == comp.version.minor;
+            } else if (comp.version.patch > 0) {
+                return v.major == 0 && v.minor == 0 && v.patch == comp.version.patch;
+            } else {
+                if (comp.version.minor == 0) {
+                    if (comp.version.patch == 0) {
+                        return v.major == 0 && v.minor == 0 && v.patch == 0;
+                    } else if (comp.version.patch == -1) {
+                        return v.major == 0 && v.minor == 0;
+                    }
+                } else if (comp.version.minor == -1) {
+                    return v.major == 0;
+                }
+                return v.major == 0 && v.minor == 0;
+            }
+        case SV_OP_TILDE:
+            if (cmp < 0) return false;
+            if (comp.version.minor != -1) {
+                return v.major == comp.version.major && v.minor == comp.version.minor;
+            } else {
+                return v.major == comp.version.major;
+            }
+        default: return false;
+    }
+}
+
+bool semver_range_match(const semver_t version, const semver_range_t range) {
+    for (int i = 0; i < range.count; i++) {
+        semver_comp_set_t *set = &range.sets[i];
+        bool set_matches = true;
+        for (int j = 0; j < set->count; j++) {
+            if (!semver_comp_match(version, set->comps[j])) {
+                set_matches = false;
+                break;
+            }
+        }
+        if (set_matches) return true;
+    }
+    return false;
+}
+
+int semver_range_parse(const char *range_str, semver_range_t *out) {
+    if (!range_str || !out) return -1;
+    memset(out, 0, sizeof(semver_range_t));
+
+    char *mutable_range = semver_strdup(range_str);
+    if (!mutable_range) return -1;
+
+    char *p = mutable_range;
+    while (p) {
+        char *next_set = strstr(p, "||");
+        if (next_set) {
+            *next_set = '\0';
+            next_set += 2;
+        }
+
+        // Trim whitespace
+        while (isspace(*p)) p++;
+        char *end = p + strlen(p) - 1;
+        while (end >= p && isspace(*end)) *end-- = '\0';
+
+        if (*p) {
+            out->sets = realloc(out->sets, sizeof(semver_comp_set_t) * (out->count + 1));
+            semver_comp_set_t *set = &out->sets[out->count++];
+            memset(set, 0, sizeof(semver_comp_set_t));
+
+            char *mutable_set = semver_strdup(p);
+            char *saveptr;
+            char *token = strtok_r(mutable_set, " ", &saveptr);
+            while (token) {
+                if (*token) {
+                    set->comps = realloc(set->comps, sizeof(semver_comp_t) * (set->count + 1));
+                    semver_comp_t *comp = &set->comps[set->count++];
+                    memset(comp, 0, sizeof(semver_comp_t));
+
+                    if (strncmp(token, ">=", 2) == 0) {
+                        comp->op = SV_OP_GTE;
+                        token += 2;
+                    } else if (strncmp(token, "<=", 2) == 0) {
+                        comp->op = SV_OP_LTE;
+                        token += 2;
+                    } else if (*token == '>') {
+                        comp->op = SV_OP_GT;
+                        token += 1;
+                    } else if (*token == '<') {
+                        comp->op = SV_OP_LT;
+                        token += 1;
+                    } else if (*token == '^') {
+                        comp->op = SV_OP_CARET;
+                        token += 1;
+                    } else if (*token == '~') {
+                        comp->op = SV_OP_TILDE;
+                        token += 1;
+                    } else if (*token == '=') {
+                        comp->op = SV_OP_EQ;
+                        token += 1;
+                    } else {
+                        comp->op = SV_OP_EQ;
+                    }
+
+                    // Handle space between operator and version
+                    if (*token == '\0') {
+                        token = strtok_r(NULL, " ", &saveptr);
+                        if (!token) {
+                            // Error: operator without version
+                            free(mutable_set);
+                            free(mutable_range);
+                            semver_range_free(out);
+                            return -1;
+                        }
+                    }
+
+                    if (semver_parse(token, &comp->version) != 0) {
+                        free(mutable_set);
+                        free(mutable_range);
+                        semver_range_free(out);
+                        return -1;
+                    }
+                }
+                token = strtok_r(NULL, " ", &saveptr);
+            }
+            free(mutable_set);
+        }
+        p = next_set;
+    }
+
+    free(mutable_range);
+    return 0;
+}
+
+void semver_range_free(semver_range_t *range) {
+    if (!range) return;
+    for (int i = 0; i < range->count; i++) {
+        semver_comp_set_t *set = &range->sets[i];
+        for (int j = 0; j < set->count; j++) {
+            semver_free(&set->comps[j].version);
+        }
+        free(set->comps);
+    }
+    free(range->sets);
+    memset(range, 0, sizeof(semver_range_t));
+}
+
 // Frees dynamically allocated memory within a semver_t struct.
 void semver_free(semver_t *sv) {
     if (sv) {

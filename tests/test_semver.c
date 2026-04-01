@@ -147,3 +147,106 @@ TEST(semver_compare, partial_precedence) {
   semver_free(&v2);
 }
 
+TEST(semver_range, basic_matching) {
+  semver_range_t range;
+  semver_t v;
+
+  semver_range_parse(">=1.0.0 <2.0.0", &range);
+  
+  semver_parse("1.0.0", &v);
+  ASSERT_TRUE(semver_range_match(v, range));
+  semver_free(&v);
+
+  semver_parse("1.5.0", &v);
+  ASSERT_TRUE(semver_range_match(v, range));
+  semver_free(&v);
+
+  semver_parse("2.0.0", &v);
+  ASSERT_FALSE(semver_range_match(v, range));
+  semver_free(&v);
+
+  semver_range_free(&range);
+}
+
+TEST(semver_range, caret_matching) {
+  semver_range_t range;
+  semver_t v;
+
+  semver_range_parse("^1.2.3", &range);
+  semver_parse("1.2.3", &v);
+  ASSERT_TRUE(semver_range_match(v, range));
+  semver_free(&v);
+
+  semver_parse("1.9.9", &v);
+  ASSERT_TRUE(semver_range_match(v, range));
+  semver_free(&v);
+
+  semver_parse("2.0.0", &v);
+  ASSERT_FALSE(semver_range_match(v, range));
+  semver_free(&v);
+  semver_range_free(&range);
+
+  semver_range_parse("^0.2.3", &range);
+  semver_parse("0.2.3", &v);
+  ASSERT_TRUE(semver_range_match(v, range));
+  semver_free(&v);
+
+  semver_parse("0.2.5", &v);
+  ASSERT_TRUE(semver_range_match(v, range));
+  semver_free(&v);
+
+  semver_parse("0.3.0", &v);
+  ASSERT_FALSE(semver_range_match(v, range));
+  semver_free(&v);
+  semver_range_free(&range);
+}
+
+TEST(semver_range, tilde_matching) {
+  semver_range_t range;
+  semver_t v;
+
+  semver_range_parse("~1.2.3", &range);
+  semver_parse("1.2.3", &v);
+  ASSERT_TRUE(semver_range_match(v, range));
+  semver_free(&v);
+
+  semver_parse("1.2.9", &v);
+  ASSERT_TRUE(semver_range_match(v, range));
+  semver_free(&v);
+
+  semver_parse("1.3.0", &v);
+  ASSERT_FALSE(semver_range_match(v, range));
+  semver_free(&v);
+  semver_range_free(&range);
+}
+
+TEST(semver_range, or_matching) {
+  semver_range_t range;
+  semver_t v;
+
+  semver_range_parse("^1.0.0 || ^2.0.0", &range);
+  semver_parse("1.5.0", &v);
+  ASSERT_TRUE(semver_range_match(v, range));
+  semver_free(&v);
+
+  semver_parse("2.5.0", &v);
+  ASSERT_TRUE(semver_range_match(v, range));
+  semver_free(&v);
+
+  semver_parse("3.0.0", &v);
+  ASSERT_FALSE(semver_range_match(v, range));
+  semver_free(&v);
+  semver_range_free(&range);
+}
+
+TEST(semver_range, spaces_matching) {
+  semver_range_t range;
+  semver_t v;
+
+  semver_range_parse(">= 1.0.0 < 2.0.0", &range);
+  semver_parse("1.5.0", &v);
+  ASSERT_TRUE(semver_range_match(v, range));
+  semver_free(&v);
+  semver_range_free(&range);
+}
+
